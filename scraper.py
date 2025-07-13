@@ -28,7 +28,7 @@ def scrape_truckers_report():
 
     updates = []
 
-    posts = soup.select('div.RoadReportCard')  # updated selector
+    posts = soup.select('div.RoadReportCard')
     for post in posts:
         text = post.get_text(separator=' ', strip=True)
         if "I-75" in text or "I75" in text:
@@ -58,7 +58,7 @@ def scrape_mdot_restrictions():
 
 def send_update(message):
     data = {"Message": message}
-    print("Sending payload:", data)  # debug print
+    print("Sending payload:", data)
     response = requests.post(WEBHOOK_URL, json=data)
     print(f"Sent update: {message[:60]}... Status: {response.status_code}")
     return response.status_code == 200
@@ -67,6 +67,12 @@ def git_commit_posted_file():
     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
     subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions"], check=True)
     subprocess.run(["git", "add", POSTED_FILE], check=True)
+
+    result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+    if result.returncode == 0:
+        print("No changes to commit.")
+        return
+
     subprocess.run(["git", "commit", "-m", "Update posted messages list"], check=True)
     subprocess.run(["git", "push"], check=True)
 
