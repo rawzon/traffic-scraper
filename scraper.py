@@ -2,7 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 
 # Replace this with your actual Make.com webhook URL
-WEBHOOK_URL = "https://hook.make.com/your-webhook-id"
+WEBHOOK_URL = "WEBHOOK_URL = "https://hook.us2.make.com/16at3ymjvi0s1fc8s7k8x8ie3n2c226p"
+"
 
 def scrape_mdot_i75_incidents():
     url = "https://mdotjboss.state.mi.us/MiDrive/incident"
