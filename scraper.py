@@ -5,7 +5,7 @@ import os
 import subprocess
 import tempfile
 
-WEBHOOK_URL = "https://hook.us2.make.com/16at3ymjvi0s1fc8s7k8x8ie3n2c226p"  # Replace with your Make.com webhook URL
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Uses GitHub secret if automated
 POSTED_FILE = "posted.txt"
 
 def load_posted_hashes():
@@ -82,12 +82,12 @@ def git_commit_posted_file():
 
         result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
         if not result.stdout.strip():
-            print("No changes to commit.")
+            print("📝 No changes to commit. Skipping push.")
             return
 
         subprocess.run(["git", "commit", "-m", "Update posted messages list"], check=True)
         subprocess.run(["git", "push"], check=True)
-        print("Changes committed and pushed.")
+        print("✅ Changes committed and pushed.")
     except subprocess.CalledProcessError as e:
         print(f"Git command failed: {e}")
     except Exception as e:
@@ -97,7 +97,7 @@ def main():
     posted_hashes = load_posted_hashes()
     updates = scrape_truckers_report() + scrape_mdot_restrictions()
 
-    print(f"Found {len(updates)} total updates.")
+    print(f"🔍 Found {len(updates)} total updates.")
     new_posts = []
     for update in updates:
         h = hash_text(update)
@@ -108,10 +108,4 @@ def main():
 
     if new_posts:
         save_posted_hashes(posted_hashes)
-        git_commit_posted_file()
-        print(f"✅ Posted {len(new_posts)} new updates.")
-    else:
-        print("ℹ️ No new updates to post.")
-
-if __name__ == "__main__":
-    main()
+        git_commit
