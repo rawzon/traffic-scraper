@@ -1,23 +1,27 @@
-name: Run Traffic Scraper
-
-on:
-  workflow_dispatch:
-
 jobs:
-  run-scraper:
+  scraper:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Get full repo history to avoid caching issues
+    - uses: actions/checkout@v3
 
-      - name: Show files in repo
-        run: ls -R
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
 
-      - name: Show scraper.py content
-        run: cat scraper.py
+    - name: Install dependencies
+      run: pip install requests beautifulsoup4
 
-      - name: Run the scraper
-        run: python scraper.py
+    - name: Run scraper
+      run: python scraper.py
 
+    - name: Commit & push posted.txt
+      run: |
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
+        git add posted.txt
+        git commit -m "Update posted messages list"
+        git push
+      env:
+        # Use the secret here to authenticate push
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
