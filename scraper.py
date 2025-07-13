@@ -1,19 +1,32 @@
 import requests
-import json
+from bs4 import BeautifulSoup
 
-WEBHOOK_URL = "https://hook.us2.make.com/16at3ymjvi0s1fc8s7k8x8ie3n2c226p"
+WEBHOOK_URL = "https://hook.us2.make.com/16at3ymjvi0s1fc8s7k8x8ie3n2c226p"  # <-- Replace with your Make webhook
 
-def send_test_update():
+def scrape_truckers_report():
+    url = "https://www.truckersreport.com/roadreports/michigan"
+    resp = requests.get(url)
+    soup = BeautifulSoup(resp.text, 'html.parser')
+
+    # Select all posts on the page
+    posts = soup.select('div.roadreport-list > div.roadreport-item')
+    for post in posts:
+        text = post.get_text(separator=' ', strip=True)
+        if "I-75" in text or "I75" in text:
+            return text
+
+    return None
+
+def send_update(message):
     data = {
-        "title": "Test Crash on I-75",
-        "description": "This is a test traffic alert sent from GitHub Actions."
+        "Message": message
     }
-
-    print("Sending this data to Make.com:")
-    print(json.dumps(data, indent=2))
-
     response = requests.post(WEBHOOK_URL, json=data)
-    print(f"Posted: {data['title']} - Status: {response.status_code}")
+    print(f"Sent update: {message[:60]}... Status: {response.status_code}")
 
 if __name__ == "__main__":
-    send_test_update()
+    update = scrape_truckers_report()
+    if update:
+        send_update(update)
+    else:
+        print("No relevant updates found.")
