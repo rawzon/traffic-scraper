@@ -1,35 +1,28 @@
-name: Run Traffic Scraper
+name: Post I-75 Updates
 
 on:
-  workflow_dispatch:   # Manual trigger
   schedule:
-    - cron: '*/30 * * * *'  # Optional: runs every 30 minutes
+    - cron: '*/15 * * * *'  # ⏱ Runs every 15 minutes
+  workflow_dispatch:        # 🖱️ Allows manual trigger
 
 jobs:
-  scraper:
+  update:
     runs-on: ubuntu-latest
 
+    env:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.x"
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: pip install requests beautifulsoup4
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Run scraper
-      run: python scraper.py
-
-    - name: Commit & push posted.txt
-      run: |
-        git config --global user.email "actions@github.com"
-        git config --global user.name "GitHub Actions"
-        git add posted.txt
-        git commit -m "Update posted messages list"
-        git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-        git push origin HEAD:main
-      shell: bash
+      - name: 🚀 Run update script
+        run: python update_script.py
