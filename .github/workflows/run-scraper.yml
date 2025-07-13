@@ -2,8 +2,8 @@ name: Run Traffic Scraper
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+    - cron: '*/15 * * * *'  # runs every 15 minutes
+  workflow_dispatch:       # allows manual run
 
 jobs:
   run-scraper:
