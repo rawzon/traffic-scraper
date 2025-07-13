@@ -48,4 +48,19 @@ def scrape_mdot_restrictions():
         cols = row.find_all('td')
         if len(cols) >= 3:
             location = cols[0].get_text(strip=True)
-            description
+            description = cols[1].get_text(strip=True)
+            dates = cols[2].get_text(strip=True)
+            combined_text = f"{location} - {description} ({dates})"
+            if "I-75" in combined_text or "I75" in combined_text:
+                updates.append(combined_text)
+
+    return updates
+
+def send_update(message):
+    data = {"Message": message}
+    print("Sending payload:", data)
+    response = requests.post(WEBHOOK_URL, json=data)
+    print(f"Sent update: {message[:60]}... Status: {response.status_code}")
+    return response.status_code == 200
+
+def git_commit_posted_file()_
