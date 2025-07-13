@@ -46,4 +46,5 @@ def scrape_mdot_restrictions():
     rows = soup.select('table tbody tr')
     for row in rows:
         cols = row.find_all('td')
-        if len(cols) >=
+        if len(cols) >= 3:
+
