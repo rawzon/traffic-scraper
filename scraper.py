@@ -4,7 +4,7 @@ import hashlib
 import os
 import subprocess
 
-WEBHOOK_URL = "https://hook.us2.make.com/your-webhook-id"  # Replace with your Make.com webhook URL
+WEBHOOK_URL = "https://hook.us2.make.com/16at3ymjvi0s1fc8s7k8x8ie3n2c226p"  # Replace with your Make.com webhook URL
 POSTED_FILE = "posted.txt"
 
 def load_posted_hashes():
