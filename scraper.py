@@ -1,116 +1,54 @@
 import requests
-from bs4 import BeautifulSoup
-import hashlib
+import json
 import os
-import subprocess
-import tempfile
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Injected via GitHub Secrets
-POSTED_FILE = "posted.txt"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb9_0.geojson"
 
-def load_posted_hashes():
-    if not os.path.exists(POSTED_FILE):
-        return set()
-    with open(POSTED_FILE, "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f)
+def fetch_data():
+    r = requests.get(MDOT_URL)
+    r.raise_for_status()
+    return r.json()
 
-def save_posted_hashes(hashes):
-    with tempfile.NamedTemporaryFile("w", delete=False, dir=".", encoding="utf-8") as tf:
-        for h in hashes:
-            tf.write(h + "\n")
-    os.replace(tf.name, POSTED_FILE)
+def filter_i75(data):
+    filtered = []
+    for feature in data.get("features", []):
+        props = feature.get("properties", {})
+        route = props.get("Route", "")
+        county = props.get("County", "")
+        if "I-75" in route and county in ["Wayne", "Monroe", "Oakland", "Macomb"]:
+            filtered.append({
+                "route": route,
+                "county": county,
+                "description": props.get("RestrictionLocation", "No description"),
+                "start": props.get("StartDate"),
+                "end": props.get("EndDate")
+            })
+    return filtered
 
-def hash_text(text):
-    return hashlib.sha256(text.encode('utf-8')).hexdigest()
-
-def scrape_truckers_report():
-    url = "https://www.truckersreport.com/roadreports/michigan"
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return [
-            post.get_text(separator=' ', strip=True)
-            for post in soup.select('div.RoadReportCard')
-            if "I-75" in post.get_text() or "I75" in post.get_text()
-        ]
-    except Exception as e:
-        print(f"❌ Error fetching TruckersReport: {e}")
-        return []
-
-def scrape_mdot_restrictions():
-    url = "https://mdotjboss.state.mi.us/traffic/Restrictions/"
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        updates = []
-        for row in soup.select('table tbody tr'):
-            cols = row.find_all('td')
-            if len(cols) >= 3:
-                location = cols[0].get_text(strip=True)
-                description = cols[1].get_text(strip=True)
-                dates = cols[2].get_text(strip=True)
-                combined = f"{location} - {description} ({dates})"
-                if "I-75" in combined or "I75" in combined:
-                    updates.append(combined)
-        return updates
-    except Exception as e:
-        print(f"❌ Error fetching MDOT Restrictions: {e}")
-        return []
-
-def send_update(message):
-    try:
-        data = {"Message": message}
-        print("📤 Sending payload:", data)
-        response = requests.post(WEBHOOK_URL, json=data, timeout=10)
-        if response.status_code == 200:
-            print(f"✅ Sent: {message[:60]}...")
-            return True
-        else:
-            print(f"❌ Webhook failed! Status: {response.status_code}, Reason: {response.reason}")
-            return False
-    except Exception as e:
-        print(f"❌ Exception during webhook call: {e}")
-        return False
-
-def git_commit_posted_file():
-    try:
-        subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
-        subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions"], check=True)
-        subprocess.run(["git", "add", POSTED_FILE], check=True)
-
-        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-        if not result.stdout.strip():
-            print("📝 No changes to commit. Skipping commit and push.")
-            return
-
-        subprocess.run(["git", "commit", "-m", "Update posted messages list"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        print("📦 Changes committed and pushed.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Git command failed: {e}")
-    except Exception as e:
-        print(f"❌ Unexpected Git error: {e}")
-
-def main():
-    posted_hashes = load_posted_hashes()
-    updates = scrape_truckers_report() + scrape_mdot_restrictions()
-
-    new_hashes = set()
-    for update in updates:
-        h = hash_text(update)
-        if h not in posted_hashes:
-            if send_update(update):
-                new_hashes.add(h)
-
-    if new_hashes:
-        posted_hashes.update(new_hashes)
-        save_posted_hashes(posted_hashes)
-        git_commit_posted_file()
-    else:
+def send_to_make(updates):
+    if not updates:
         print("✅ No new updates to post.")
-# Trigger GitHub Actions
+        return
+
+    for update in updates:
+        message = {
+            "route": update["route"],
+            "county": update["county"],
+            "description": update["description"],
+            "start": update["start"],
+            "end": update["end"]
+        }
+        r = requests.post(WEBHOOK_URL, json=message)
+        if r.ok:
+            print(f"🚀 Sent update for {update['route']} in {update['county']}")
+        else:
+            print(f"❌ Failed to send update: {r.text}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        data = fetch_data()
+        updates = filter_i75(data)
+        send_to_make(updates)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching MDOT data: {e}")
