@@ -17,9 +17,12 @@ jobs:
 
       - name: 🧰 Install dependencies
         run: pip install requests
+        working-directory: ${{ github.workspace }}
 
       - name: 🐛 Debug: Show scraper.py contents
         run: cat scraper.py
+        working-directory: ${{ github.workspace }}
 
       - name: 🚦 Run scraper
         run: python scraper.py
+        working-directory: ${{ github.workspace }}
