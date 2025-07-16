@@ -1,8 +1,9 @@
 name: Monroe Traffic Updates
 
 on:
+  workflow_dispatch:  # allows manual trigger from GitHub app or web
   schedule:
-    - cron: '*/15 * * * *'  # every 15 minutes
+    - cron: '*/15 * * * *'  # runs every 15 minutes
 
 jobs:
   update:
