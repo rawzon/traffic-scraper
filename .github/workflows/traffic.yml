@@ -12,13 +12,16 @@ jobs:
       WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
     defaults:
       run:
-        working-directory: ${{ github.workspace }}  # 👈 ensures correct path
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
       - name: Install dependencies
         run: pip install requests
+
+      - name: Debug: Show scraper.py contents
+        run: cat scraper.py
 
       - name: Run scraper
         run: python scraper.py
