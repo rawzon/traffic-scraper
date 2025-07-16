@@ -1,0 +1,11 @@
+name: Workflow Sanity Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ✅ Confirm workflow is alive
+        run: echo "Hello from GitHub Actions!"
