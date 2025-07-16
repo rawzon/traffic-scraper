@@ -1,10 +1,12 @@
-name: Run Scraper Manually
+name: Monroe Traffic Updates
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
 
 jobs:
-  run-scraper:
+  update:
     runs-on: ubuntu-latest
     env:
       WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
