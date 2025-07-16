@@ -8,7 +8,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 # ✅ Direct ArcGIS REST endpoint for MDOT Lane Closures
 MDOT_URL = (
     "https://services1.arcgis.com/1zEHoSYjGqU2Jr0h/arcgis/rest/services/"
-    "Lane_Closures/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson"
+    "Lane_Closures/FeatureServer/0/query?where=1%3D1&outFields=*&f=json"
 )
 
 ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
