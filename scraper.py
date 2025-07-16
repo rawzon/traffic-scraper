@@ -3,21 +3,38 @@ import os
 import json
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb9_0.geojson"
 
-# ✅ Test payload — will always send this once when script runs
-test_update = {
-    "source": "Test",
-    "route": "I-75",
-    "county": "Monroe",
-    "location": "Test area near Ford Packaging Center",
-    "description": "🚨 This is a test traffic alert to verify Make.com integration.",
-    "start": "2025-07-16",
-    "end": "2025-07-17"
-}
+ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
+COUNTIES = ["Monroe", "Wayne"]
+
+def fetch_mdot_data():
+    r = requests.get(MDOT_URL)
+    r.raise_for_status()
+    return r.json()
+
+def filter_michigan_updates(data):
+    filtered = []
+    for feature in data.get("features", []):
+        props = feature.get("properties", {})
+        route = props.get("Route", "") or ""
+        county = props.get("County", "") or ""
+
+        if any(r in route for r in ROUTES) and county in COUNTIES:
+            filtered.append({
+                "source": "MDOT",
+                "route": route,
+                "county": county,
+                "location": props.get("RestrictionLocation", "Unknown"),
+                "description": props.get("Description", "No description provided."),
+                "start": props.get("StartDate"),
+                "end": props.get("EndDate")
+            })
+    return filtered
 
 def send_to_make(updates):
     if not updates:
-        print("✅ No updates to send.")
+        print("✅ No new traffic impacts found.")
         return
 
     for update in updates:
@@ -34,6 +51,9 @@ def send_to_make(updates):
             print(f"❌ Request error: {e}")
 
 if __name__ == "__main__":
-    # 🧪 Send the test alert
-    print("📡 Sending test update to Make.com")
-    send_to_make([test_update])
+    try:
+        data = fetch_mdot_data()
+        updates = filter_michigan_updates(data)
+        send_to_make(updates)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching MDOT data: {e}")
