@@ -1,7 +1,7 @@
 import requests
 import os
 import json
-
+# Updated July 16 — forcing fresh commit
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb9_0.geojson"
 
