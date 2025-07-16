@@ -62,37 +62,4 @@ def scrape_mdot_restrictions():
 def send_update(message):
     try:
         data = {"Message": message}
-        print("📤 Sending payload:", data)
-        response = requests.post(WEBHOOK_URL, json=data, timeout=10)
-        if response.status_code == 200:
-            print(f"✅ Sent: {message[:60]}...")
-            return True
-        else:
-            print(f"❌ Webhook failed! Status: {response.status_code}, Reason: {response.reason}")
-            return False
-    except Exception as e:
-        print(f"❌ Exception during webhook call: {e}")
-        return False
-
-def git_commit_posted_file():
-    try:
-        subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
-        subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions"], check=True)
-        subprocess.run(["git", "add", POSTED_FILE], check=True)
-
-        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-        if not result.stdout.strip():
-            print("📝 No changes to commit. Skipping commit and push.")
-            return
-
-        subprocess.run(["git", "commit", "-m", "Update posted messages list"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        print("📦 Changes committed and pushed.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Git command failed: {e}")
-    except Exception as e:
-        print(f"❌ Unexpected Git error: {e}")
-
-def main():
-    posted_hashes = load_posted_hashes()
-    updates = scrape_truckers_report() + scrape_mdot_restrictions
+        print("📤
