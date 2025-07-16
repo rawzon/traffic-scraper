@@ -1,15 +1,18 @@
 name: Monroe Traffic Updates
 
 on:
-  workflow_dispatch:  # allows manual trigger from GitHub app or web
+  workflow_dispatch:
   schedule:
-    - cron: '*/15 * * * *'  # runs every 15 minutes
+    - cron: '*/15 * * * *'
 
 jobs:
   update:
     runs-on: ubuntu-latest
     env:
       WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}  # 👈 ensures correct path
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
