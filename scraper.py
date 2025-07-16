@@ -11,7 +11,7 @@ COUNTIES = ["Monroe", "Wayne"]
 
 def fetch_mdot_data():
     print("🌐 Fetching MDOT traffic data...")
-    print("🔎 MDOT_URL being used:", MDOT_URL)  # 👈 Debug line
+    print("🔎 MDOT_URL being used:", MDOT_URL)  # 👈 debug line
     r = requests.get(MDOT_URL)
     r.raise_for_status()
     return r.json()
@@ -53,3 +53,12 @@ def send_to_make(updates):
             else:
                 print(f"❌ Failed to send: {r.text}")
         except Exception as e:
+            print(f"❌ Request error: {e}")  # 👈 This was missing indentation
+
+if __name__ == "__main__":
+    try:
+        data = fetch_mdot_data()
+        updates = filter_michigan_updates(data)
+        send_to_make(updates)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching MDOT data: {e}")
