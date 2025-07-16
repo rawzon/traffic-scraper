@@ -2,30 +2,10 @@ name: Monroe Traffic Updates
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '*/15 * * * *'
-  push:
-    branches:
-      - main
-#test
+
 jobs:
-  update:
+  test:
     runs-on: ubuntu-latest
-    env:
-      WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-
     steps:
-      - name: 📥 Checkout repo
-        uses: actions/checkout@v3
-
-      - name: 🧰 Install dependencies
-        run: pip install requests
-
-      - name: 🐛 Debug: Show scraper.py contents
-        run: cat scraper.py
-
-      - name: 🚦 Run scraper
-        run: python scraper.py
+      - name: ✅ Confirm workflow is working
+        run: echo "Workflow is alive!"
