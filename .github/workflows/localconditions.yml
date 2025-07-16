@@ -1,0 +1,22 @@
+name: Monroe Traffic Radar
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    env:
+      WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run LocalConditions scraper
+        run: python localconditions_scraper.py
