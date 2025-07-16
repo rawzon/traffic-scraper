@@ -17,12 +17,9 @@ jobs:
 
       - name: 🧰 Install dependencies
         run: pip install requests
-        working-directory: .
 
       - name: 🐛 Debug: Show scraper.py contents
         run: cat scraper.py
-        working-directory: .
 
       - name: 🚦 Run scraper
         run: python scraper.py
-        working-directory: .
