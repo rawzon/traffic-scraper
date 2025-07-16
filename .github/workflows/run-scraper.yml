@@ -1,14 +1,29 @@
-name: Traffic Scraper
+name: Run Scraper Manually
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  run-scraper:
     runs-on: ubuntu-latest
     env:
       WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 🧰 Install dependencies
+        run: pip install requests
+
+      - name: 🐛 Debug: Show scraper.py contents
+        run: cat scraper.py
+
+      - name: 🚦 Run scraper
+        run: python scraper.py }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
