@@ -1,19 +1,21 @@
-# Force refresh — debug mode July 16
+# Full rewrite — uses ArcGIS direct query (no redirect)
 import requests
 import os
 import json
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# ✅ Correct MDOT feed URL
-MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb9_0.geojson"
+# ✅ Direct ArcGIS REST endpoint for MDOT Lane Closures
+MDOT_URL = (
+    "https://services1.arcgis.com/1zEHoSYjGqU2Jr0h/arcgis/rest/services/"
+    "Lane_Closures/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson"
+)
 
-# 🚧 Relevant traffic routes
 ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
 COUNTIES = ["Monroe", "Wayne"]
 
 def fetch_mdot_data():
-    print("🌐 Fetching MDOT traffic data...")
+    print("🌐 Fetching MDOT traffic data via direct ArcGIS endpoint...")
     print("🔎 MDOT_URL being used:", MDOT_URL)
     r = requests.get(MDOT_URL)
     r.raise_for_status()
