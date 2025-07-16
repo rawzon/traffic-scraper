@@ -1,16 +1,17 @@
-# Force refresh — updated July 16
+# Force refresh — debug mode July 16
 import requests
 import os
 import json
-# Updated July 16 — forcing fresh commit
+
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb9_0.geojson"
 
 ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
 COUNTIES = ["Monroe", "Wayne"]
-# Updated July 16 — forcing fresh commi
+
 def fetch_mdot_data():
     print("🌐 Fetching MDOT traffic data...")
+    print("🔎 MDOT_URL being used:", MDOT_URL)  # 👈 Debug line
     r = requests.get(MDOT_URL)
     r.raise_for_status()
     return r.json()
@@ -52,12 +53,3 @@ def send_to_make(updates):
             else:
                 print(f"❌ Failed to send: {r.text}")
         except Exception as e:
-            print(f"❌ Request error: {e}")
-
-if __name__ == "__main__":
-    try:
-        data = fetch_mdot_data()
-        updates = filter_michigan_updates(data)
-        send_to_make(updates)
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching MDOT data: {e}")
