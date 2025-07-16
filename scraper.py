@@ -7,7 +7,7 @@ MDOT_URL = "https://opendata.arcgis.com/datasets/f1e2c9438c274f8cb0b2e85b1ba6cfb
 
 ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
 COUNTIES = ["Monroe", "Wayne"]
-
+# Updated July 16 — forcing fresh commi
 def fetch_mdot_data():
     print("🌐 Fetching MDOT traffic data...")
     r = requests.get(MDOT_URL)
