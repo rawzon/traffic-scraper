@@ -1,5 +1,5 @@
 name: Monroe Traffic Updates
-#update 
+
 on:
   workflow_dispatch:
   schedule:
