@@ -28,9 +28,16 @@ def haversine(lat1, lon1, lat2, lon2):
 
 def fetch_incidents():
     print("Fetching incidents from MDOT RIDE...")
-    r = requests.get(RIDE_URL)
-    r.raise_for_status()
-    return r.json()
+    headers = {
+        "Authorization": f"Bearer {os.getenv('MDOT_API_KEY')}"
+    }
+    try:
+        r = requests.get(RIDE_URL, headers=headers)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        print("Error fetching data:", e)
+        return {"records": []}
 
 def filter_by_distance(data):
     print("Filtering incidents within 40 miles of Monroe County...")
@@ -74,9 +81,6 @@ def send_to_webhook(updates):
             print("Error sending to webhook:", e)
 
 if __name__ == "__main__":
-    try:
-        data = fetch_incidents()
-        filtered = filter_by_distance(data)
-        send_to_webhook(filtered)
-    except requests.RequestException as e:
-        print("Error fetching data:", e)
+    data = fetch_incidents()
+    filtered = filter_by_distance(data)
+    send_to_webhook(filtered)
