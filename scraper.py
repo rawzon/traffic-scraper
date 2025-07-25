@@ -1,86 +1,99 @@
 import requests
 import os
-import json
-from math import radians, cos, sin, asin, sqrt
+import math
 
-# Webhook to send filtered incident data
+# Constants
+RIDE_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 
-# MDOT RIDE incidents endpoint
-RIDE_URL = (
-    "https://mdotridedata.state.mi.us/api/v1/organization/"
-    "michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
-)
-
-# Monroe County center point
-MONROE_LAT = 41.883866
-MONROE_LON = -83.395468
-RADIUS_MILES = 40
+# Monroe County location (approximate center)
+MONROE_LAT = 41.9403
+MONROE_LON = -83.3960
+DISTANCE_THRESHOLD_MILES = 40
 
 def haversine(lat1, lon1, lat2, lon2):
-    # Calculate great-circle distance (in miles)
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1 
-    dlat = lat2 - lat1 
-    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
-    c = 2 * asin(sqrt(a))
-    return 3956 * c  # Earth radius in miles
+    R = 3958.8  # Earth radius in miles
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
 
 def fetch_incidents():
     print("Fetching incidents from MDOT RIDE...")
-    headers = {
-        "Authorization": f"Bearer {os.getenv('MDOT_API_KEY')}"
-    }
-    try:
-        r = requests.get(RIDE_URL, headers=headers)
-        r.raise_for_status()
-        return r.json()
-    except requests.RequestException as e:
-        print("Error fetching data:", e)
-        return {"records": []}
 
-def filter_by_distance(data):
+    headers = {
+        "api_key": MDOT_API_KEY  # Correct header for MDOT API
+    }
+
+    r = requests.get(RIDE_URL, headers=headers)
+    r.raise_for_status()
+    return r.json()
+
+def filter_nearby_incidents(incidents):
     print("Filtering incidents within 40 miles of Monroe County...")
     nearby = []
-    for incident in data.get("records", []):
-        props = incident.get("record", {})
-        lat = props.get("latitude")
-        lon = props.get("longitude")
 
-        if lat is None or lon is None:
+    for item in incidents.get("data", []):
+        props = item.get("attributes", {})
+        geometry = item.get("geometry", {})
+        coords = geometry.get("coordinates", [])
+
+        if len(coords) != 2:
             continue
 
-        distance = haversine(MONROE_LAT, MONROE_LON, lat, lon)
-        if distance <= RADIUS_MILES:
-            nearby.append({
-                "source": "MDOT RIDE",
-                "location": props.get("location", "Unknown"),
-                "description": props.get("event_type", "No description provided."),
-                "start": props.get("start_date"),
-                "end": props.get("end_date"),
-                "lat": lat,
-                "lon": lon,
-                "distance_miles": round(distance, 2)
-            })
+        lon, lat = coords
+        distance = haversine(lat, lon, MONROE_LAT, MONROE_LON)
+        if distance <= DISTANCE_THRESHOLD_MILES:
+            props["distance_miles"] = round(distance, 1)
+            nearby.append(props)
+
     print(f"Found {len(nearby)} nearby incidents.")
     return nearby
 
-def send_to_webhook(updates):
-    if not updates:
-        print("No nearby incidents found.")
+def format_incident_message(incident):
+    desc = incident.get("description", "No description")
+    type_ = incident.get("incident_type", "Unknown type")
+    status = incident.get("status", "Unknown status")
+    dist = incident.get("distance_miles", "?")
+
+    return f"🚧 **{type_}** - {desc}\nStatus: {status} | Distance: {dist} mi\n"
+
+def post_to_webhook(messages):
+    if not WEBHOOK_URL:
+        print("No webhook URL provided.")
         return
 
-    for update in updates:
-        try:
-            r = requests.post(WEBHOOK_URL, json=update)
-            if r.ok:
-                print(f"Sent: {update['location']} ({update['distance_miles']} miles)")
-            else:
-                print(f"Failed to send: {r.status_code} - {r.text}")
-        except Exception as e:
-            print("Error sending to webhook:", e)
+    payload = {
+        "content": "\n".join(messages)
+    }
+
+    response = requests.post(WEBHOOK_URL, json=payload)
+    if response.status_code == 204 or response.ok:
+        print("✅ Posted to webhook successfully.")
+    else:
+        print(f"❌ Failed to post to webhook: {response.status_code}")
+        print(response.text)
+
+def main():
+    try:
+        data = fetch_incidents()
+        nearby = filter_nearby_incidents(data)
+
+        if not nearby:
+            print("No nearby incidents found.")
+            return
+
+        messages = [format_incident_message(inc) for inc in nearby]
+        post_to_webhook(messages)
+
+    except Exception as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    data = fetch_incidents()
-    filtered = filter_by_distance(data)
-    send_to_webhook(filtered)
+    main()
