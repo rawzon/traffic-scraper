@@ -1,69 +1,82 @@
-# Full rewrite — uses ArcGIS direct query (no redirect)
 import requests
 import os
 import json
+from math import radians, cos, sin, asin, sqrt
 
+# Webhook to send filtered incident data
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# ✅ Direct ArcGIS REST endpoint for MDOT Lane Closures
-MDOT_URL = (
-    "https://services1.arcgis.com/1zEHoSYjGqU2Jr0h/arcgis/rest/services/"
-    "Lane_Closures/FeatureServer/0/query?where=1%3D1&outFields=*&f=json"
+# MDOT RIDE incidents endpoint
+RIDE_URL = (
+    "https://mdotridedata.state.mi.us/api/v1/organization/"
+    "michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
 )
 
-ROUTES = ["I-75", "US-24", "M-125", "Telegraph", "Dix", "Sylvania"]
-COUNTIES = ["Monroe", "Wayne"]
+# Monroe County center point
+MONROE_LAT = 41.883866
+MONROE_LON = -83.395468
+RADIUS_MILES = 40
 
-def fetch_mdot_data():
-    print("🌐 Fetching MDOT traffic data via direct ArcGIS endpoint...")
-    print("🔎 MDOT_URL being used:", MDOT_URL)
-    r = requests.get(MDOT_URL)
+def haversine(lat1, lon1, lat2, lon2):
+    # Calculate great-circle distance (in miles)
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1 
+    dlat = lat2 - lat1 
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * asin(sqrt(a))
+    return 3956 * c  # Earth radius in miles
+
+def fetch_incidents():
+    print("Fetching incidents from MDOT RIDE...")
+    r = requests.get(RIDE_URL)
     r.raise_for_status()
     return r.json()
 
-def filter_michigan_updates(data):
-    print("🔍 Filtering updates for Monroe/Wayne County routes...")
-    filtered = []
-    for feature in data.get("features", []):
-        props = feature.get("properties", {})
-        route = props.get("Route", "") or ""
-        county = props.get("County", "") or ""
+def filter_by_distance(data):
+    print("Filtering incidents within 40 miles of Monroe County...")
+    nearby = []
+    for incident in data.get("records", []):
+        props = incident.get("record", {})
+        lat = props.get("latitude")
+        lon = props.get("longitude")
 
-        if any(r in route for r in ROUTES) and county in COUNTIES:
-            filtered.append({
-                "source": "MDOT",
-                "route": route,
-                "county": county,
-                "location": props.get("RestrictionLocation", "Unknown"),
-                "description": props.get("Description", "No description provided."),
-                "start": props.get("StartDate"),
-                "end": props.get("EndDate")
+        if lat is None or lon is None:
+            continue
+
+        distance = haversine(MONROE_LAT, MONROE_LON, lat, lon)
+        if distance <= RADIUS_MILES:
+            nearby.append({
+                "source": "MDOT RIDE",
+                "location": props.get("location", "Unknown"),
+                "description": props.get("event_type", "No description provided."),
+                "start": props.get("start_date"),
+                "end": props.get("end_date"),
+                "lat": lat,
+                "lon": lon,
+                "distance_miles": round(distance, 2)
             })
-    print(f"📦 Found {len(filtered)} relevant updates.")
-    return filtered
+    print(f"Found {len(nearby)} nearby incidents.")
+    return nearby
 
-def send_to_make(updates):
+def send_to_webhook(updates):
     if not updates:
-        print("✅ No new traffic impacts found.")
+        print("No nearby incidents found.")
         return
 
     for update in updates:
-        print("📡 Sending to Make.com:", json.dumps(update, indent=2))
         try:
             r = requests.post(WEBHOOK_URL, json=update)
-            print("🔁 Response status:", r.status_code)
-            print("🔍 Response body:", r.text)
             if r.ok:
-                print(f"🚀 Sent: {update['route']} - {update['county']}")
+                print(f"Sent: {update['location']} ({update['distance_miles']} miles)")
             else:
-                print(f"❌ Failed to send: {r.text}")
+                print(f"Failed to send: {r.status_code} - {r.text}")
         except Exception as e:
-            print(f"❌ Request error: {e}")
+            print("Error sending to webhook:", e)
 
 if __name__ == "__main__":
     try:
-        data = fetch_mdot_data()
-        updates = filter_michigan_updates(data)
-        send_to_make(updates)
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching MDOT data: {e}")
+        data = fetch_incidents()
+        filtered = filter_by_distance(data)
+        send_to_webhook(filtered)
+    except requests.RequestException as e:
+        print("Error fetching data:", e)
