@@ -10,11 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+      MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}  # <-- Add this line
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: python scraper.py
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        run: python scraper.py
