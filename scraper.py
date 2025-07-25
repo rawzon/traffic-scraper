@@ -9,7 +9,7 @@ MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 
 MONROE_LAT = 41.9403
 MONROE_LON = -83.3960
-DISTANCE_THRESHOLD_MILES = 400
+DISTANCE_THRESHOLD_MILES = 40
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 3958.8  # Radius of Earth in miles
