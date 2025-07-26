@@ -61,4 +61,43 @@ def format_incident_message(incident):
     status = incident.get("status", "Unknown status")
     dist = incident.get("distance_miles", "?")
 
-    return f"{type_} - {desc}\nStatus: {status}
+    return f"{type_} - {desc}\nStatus: {status} | Distance: {dist} mi\n"
+
+def post_to_webhook(messages):
+    if not WEBHOOK_URL:
+        print("No webhook URL provided.")
+        return
+
+    payload = {
+        "content": "\n".join(messages)
+    }
+
+    response = requests.post(WEBHOOK_URL, json=payload)
+    if response.status_code == 204 or response.ok:
+        print("Posted to webhook successfully.")
+    else:
+        print(f"Failed to post to webhook: {response.status_code}")
+        print(response.text)
+
+def main():
+    try:
+        data = fetch_incidents()
+
+        # MDOT sometimes wraps data in a dict under "features"
+        if isinstance(data, dict) and "features" in data:
+            data = data["features"]
+
+        nearby = filter_nearby_incidents(data)
+
+        if not nearby:
+            print("No nearby incidents found.")
+            return
+
+        messages = [format_incident_message(inc) for inc in nearby]
+        post_to_webhook(messages)
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
