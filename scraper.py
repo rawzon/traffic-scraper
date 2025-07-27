@@ -1,6 +1,7 @@
 import requests
 import os
 import math
+import time
 
 # Constants
 RIDE_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
@@ -18,21 +19,34 @@ def haversine(lat1, lon1, lat2, lon2):
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
 
-    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
 
-def fetch_incidents():
+def fetch_incidents(retries=3, delay=5):
     print("Fetching incidents from MDOT RIDE...")
 
     headers = {
         "api_key": MDOT_API_KEY
     }
 
-    response = requests.get(RIDE_URL, headers=headers)
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(retries):
+        try:
+            r = requests.get(RIDE_URL, headers=headers)
+            r.raise_for_status()
+            return r.json().get("features", [])
+        except requests.exceptions.HTTPError as e:
+            print(f"Attempt {attempt + 1}: HTTP {r.status_code}")
+            if r.status_code >= 500:
+                time.sleep(delay)
+            else:
+                raise e
+        except Exception as e:
+            print(f"Request failed: {e}")
+            time.sleep(delay)
+
+    raise Exception("MDOT API failed after retries.")
 
 def filter_nearby_incidents(incidents):
     print("Filtering incidents within 40 miles of Monroe County...")
@@ -61,7 +75,7 @@ def format_incident_message(incident):
     status = incident.get("status", "Unknown status")
     dist = incident.get("distance_miles", "?")
 
-    return f"{type_} - {desc}\nStatus: {status} | Distance: {dist} mi\n"
+    return f"🚧 **{type_}** - {desc}\nStatus: {status} | Distance: {dist} mi\n"
 
 def post_to_webhook(messages):
     if not WEBHOOK_URL:
@@ -74,19 +88,14 @@ def post_to_webhook(messages):
 
     response = requests.post(WEBHOOK_URL, json=payload)
     if response.status_code == 204 or response.ok:
-        print("Posted to webhook successfully.")
+        print("✅ Posted to webhook successfully.")
     else:
-        print(f"Failed to post to webhook: {response.status_code}")
+        print(f"❌ Failed to post to webhook: {response.status_code}")
         print(response.text)
 
 def main():
     try:
         data = fetch_incidents()
-
-        # MDOT sometimes wraps data in a dict under "features"
-        if isinstance(data, dict) and "features" in data:
-            data = data["features"]
-
         nearby = filter_nearby_incidents(data)
 
         if not nearby:
