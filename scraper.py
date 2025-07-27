@@ -3,7 +3,6 @@ import os
 import math
 import time
 
-# Constants
 RIDE_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 MDOT_API_KEY = os.getenv("MDOT_API_KEY")
@@ -13,7 +12,7 @@ MONROE_LON = -83.3960
 DISTANCE_THRESHOLD_MILES = 40
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8  # Radius of Earth in miles
+    R = 3958.8
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -35,13 +34,7 @@ def fetch_incidents(retries=3, delay=5):
         try:
             r = requests.get(RIDE_URL, headers=headers)
             r.raise_for_status()
-            return r.json().get("features", [])
-        except requests.exceptions.HTTPError as e:
-            print(f"Attempt {attempt + 1}: HTTP {r.status_code}")
-            if r.status_code >= 500:
-                time.sleep(delay)
-            else:
-                raise e
+            return r.json()
         except Exception as e:
             print(f"Request failed: {e}")
             time.sleep(delay)
@@ -53,7 +46,6 @@ def filter_nearby_incidents(incidents):
     nearby = []
 
     for item in incidents:
-        props = item.get("attributes", {})
         geometry = item.get("geometry", {})
         coords = geometry.get("coordinates", [])
 
@@ -63,19 +55,20 @@ def filter_nearby_incidents(incidents):
         lon, lat = coords
         distance = haversine(lat, lon, MONROE_LAT, MONROE_LON)
         if distance <= DISTANCE_THRESHOLD_MILES:
-            props["distance_miles"] = round(distance, 1)
-            nearby.append(props)
+            item["distance_miles"] = round(distance, 1)
+            nearby.append(item)
 
     print(f"Found {len(nearby)} nearby incidents.")
     return nearby
 
 def format_incident_message(incident):
-    desc = incident.get("description", "No description")
-    type_ = incident.get("incident_type", "Unknown type")
-    status = incident.get("status", "Unknown status")
+    props = incident.get("attributes", {})
+    desc = props.get("description", "No description")
+    type_ = props.get("incident_type", "Unknown type")
+    status = props.get("status", "Unknown status")
     dist = incident.get("distance_miles", "?")
 
-    return f"🚧 **{type_}** - {desc}\nStatus: {status} | Distance: {dist} mi\n"
+    return f"{type_} - {desc}\nStatus: {status} | Distance: {dist} mi\n"
 
 def post_to_webhook(messages):
     if not WEBHOOK_URL:
