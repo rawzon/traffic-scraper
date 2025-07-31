@@ -8,7 +8,13 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-
+- name: Debug environment variables
+  run: |
+    echo "MDOT_API_KEY is set: $MDOT_API_KEY"
+    echo "WEBHOOK_URL is set: $WEBHOOK_URL"
+  env:
+    MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
+    WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
     env:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
       MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
