@@ -37,6 +37,18 @@ def within_distance(incident):
         print(f"[WARN] Skipping invalid coordinates: {e}")
         return False
 
+def format_incidents(incidents):
+    if not incidents:
+        return "No traffic incidents reported near Monroe, MI at this time."
+
+    lines = []
+    for i in incidents:
+        road = i.get("road_name", "Unknown road")
+        location = i.get("location", "Unknown location")
+        desc = i.get("description", "No description")
+        lines.append(f"{road} - {location}: {desc}")
+    return "\n".join(lines)
+
 def main():
     try:
         data = fetch_incidents()
@@ -46,7 +58,8 @@ def main():
         filtered = [i for i in data if within_distance(i)]
         print(f"[INFO] Found {len(filtered)} incidents within {DISTANCE_LIMIT_MILES} miles.")
 
-        payload = {"incidents": filtered}
+        message = format_incidents(filtered)
+        payload = {"text": message}
 
         if WEBHOOK_URL:
             try:
