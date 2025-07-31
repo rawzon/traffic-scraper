@@ -1,77 +1,89 @@
-import os
 import requests
-from geopy.distance import geodesic
+import json
+import math
+import os
 
-# MDOT endpoint and credentials
-MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+# Your coordinates
+MY_LAT = 41.8995
+MY_LON = -84.0335
+RADIUS_MILES = 40
+
+# MDOT API URL
+URL = "https://mdotjboss.state.mi.us/MiDrive/rest/incident"
+
+# Get env variables
 MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# Monroe reference point and radius
-MONROE_COORDS = (41.9164, -83.3977)
-DISTANCE_LIMIT_MILES = 40
+if not MDOT_API_KEY:
+    print("❌ ERROR: MDOT_API_KEY environment variable not set.")
+    exit(1)
+if not WEBHOOK_URL:
+    print("❌ ERROR: WEBHOOK_URL environment variable not set.")
+    exit(1)
 
-def fetch_incidents():
-    if not MDOT_API_KEY:
-        raise ValueError("MDOT_API_KEY is not set")
-    headers = {
-        "Accept": "application/json",
-        "api_key": MDOT_API_KEY
-    }
-    print("[INFO] Fetching incident data from MDOT...")
-    response = requests.get(MDOT_URL, headers=headers, timeout=10)
-    print(f"[DEBUG] Status code: {response.status_code}")
-    response.raise_for_status()
-    return response.json()
+print("[INFO] Fetching incident data from MDOT...")
+headers = {"mdotApiKey": MDOT_API_KEY}
+response = requests.get(URL, headers=headers)
 
-def within_distance(incident):
-    lat = incident.get("latitude")
-    lon = incident.get("longitude")
-    if lat is None or lon is None:
-        return False
+print("[DEBUG] Status code:", response.status_code)
+data = response.json()
+
+print("[DEBUG] Raw type:", type(data))
+if isinstance(data, list) and data:
+    print("[DEBUG] Sample item:", data[0])
+
+# Distance calculator (Haversine formula)
+def haversine(lat1, lon1, lat2, lon2):
+    R = 3958.8  # miles
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+# Filter nearby incidents
+def nearby(incident):
     try:
-        incident_coords = (float(lat), float(lon))
-        distance = geodesic(MONROE_COORDS, incident_coords).miles
-        return distance <= DISTANCE_LIMIT_MILES
-    except Exception as e:
-        print(f"[WARN] Skipping invalid coordinates: {e}")
+        dist = haversine(MY_LAT, MY_LON, incident["latitude"], incident["longitude"])
+        return dist <= RADIUS_MILES
+    except:
         return False
 
-def format_incidents(incidents):
-    if not incidents:
-        return "No traffic incidents reported near Monroe, MI at this time."
+filtered = [i for i in data if nearby(i)]
+print(f"[INFO] Found {len(filtered)} incidents within {RADIUS_MILES} miles.")
 
-    lines = []
+# Format each incident
+def format_incidents(incidents):
+    results = []
+    direction_map = {1: "EB", 2: "WB", 3: "SB", 4: "NB"}
+
     for i in incidents:
         road = i.get("roadway", "Unknown road")
         location = i.get("location-desc", "Unknown location")
-        desc = i.get("description") or "No description available"
-        lines.append(f"{road} - {location}: {desc}")
-    return "\n".join(lines)
+        incident = i.get("incident", {})
+        description = i.get("description", "").strip()
 
-def main():
-    try:
-        data = fetch_incidents()
-        print(f"[DEBUG] Raw type: {type(data)}")
-        print(f"[DEBUG] Sample item: {data[0] if isinstance(data, list) and data else 'No data'}")
+        if not description:
+            lanes = ", ".join(incident.get("lanes-blocked", [])) if incident.get("lanes-blocked") else "N/A"
+            direction = direction_map.get(i.get("dir-of-travel", 0), "Unknown")
+            start_time = i.get("startdatetime", "Unknown time")
+            description = f"Lanes blocked: {lanes}, Direction: {direction}, Reported: {start_time}"
 
-        filtered = [i for i in data if within_distance(i)]
-        print(f"[INFO] Found {len(filtered)} incidents within {DISTANCE_LIMIT_MILES} miles.")
+        results.append(f"{road} - {location}: {description}")
 
-        message = format_incidents(filtered)
-        payload = {"text": message}
+    return "\n\n".join(results)
 
-        if WEBHOOK_URL:
-            try:
-                response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
-                print(f"[INFO] Webhook post status: {response.status_code}")
-            except requests.RequestException as e:
-                print(f"[ERROR] Webhook post failed: {e}")
-        else:
-            print("[ERROR] WEBHOOK_URL is not set")
+message = format_incidents(filtered)
 
-    except Exception as e:
-        print(f"[ERROR] Unexpected failure: {e}")
-
-if __name__ == "__main__":
-    main()
+# Post to webhook
+print("[INFO] Sending to webhook...")
+payload = {
+    "title": "I-75 Traffic Alert",
+    "description": message if message else "No incidents found nearby."
+}
+webhook_response = requests.post(WEBHOOK_URL, json=payload)
+print("[INFO] Webhook post status:", webhook_response.status_code)
