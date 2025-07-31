@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime
 
-MDOT_ENDPOINT = "https://mdotjboss.state.mi.us/MiDrive/rest/trafficEvents"
+MDOT_ENDPOINT = "https://mdotridedata.state.mi.us//api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
