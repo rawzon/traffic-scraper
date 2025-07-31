@@ -1,73 +1,35 @@
 import requests
-import json
-import math
+import os
 
-# Constants
-FORD_MONROE_LAT = 41.916
-FORD_MONROE_LON = -83.385
-SEARCH_RADIUS_MILES = 40
+URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+API_KEY = os.environ.get("MDOT_API_KEY")
 
-# Headers and endpoint
-url = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
-headers = {
-    "Accept": "application/json",
-    "x-api-key": "YOUR_MDOT_API_KEY"  # Replace with your actual key in secrets
+headers_options = {
+    "x-api-key": {"Accept": "application/json", "x-api-key": API_KEY},
+    "api_key": {"Accept": "application/json", "api_key": API_KEY},
+    "Authorization": {"Accept": "application/json", "Authorization": f"Bearer {API_KEY}"},
+    "none": {"Accept": "application/json"}
 }
 
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 3958.8  # Radius in miles
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) \
-        * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-def fetch_data():
-    print("[INFO] Fetching incident data...")
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    print(f"[INFO] Response status: {response.status_code}")
-    return response.json()
-
-def filter_incidents(data):
-    print("[INFO] Filtering incidents within 40 miles of Ford Monroe...")
-    filtered = []
-    for item in data.get('features', []):
-        props = item.get('properties', {})
-        coords = item.get('geometry', {}).get('coordinates', [None, None])
-        lon, lat = coords
-        if lat is None or lon is None:
-            continue
-        distance = haversine_distance(FORD_MONROE_LAT, FORD_MONROE_LON, lat, lon)
-        if distance <= SEARCH_RADIUS_MILES:
-            props['distance_miles'] = round(distance, 2)
-            filtered.append(props)
-    print(f"[INFO] Found {len(filtered)} matching incidents.")
-    return filtered
-
-def send_alerts(filtered_data):
-    webhook_url = "YOUR_WEBHOOK_URL"  # Replace with your actual webhook URL in secrets
-    if not filtered_data:
-        print("[INFO] No alerts to send.")
-        return
-
-    payload = {
-        "text": f"{len(filtered_data)} MDOT incidents near Ford Monroe:\n\n"
-    }
-    for incident in filtered_data:
-        payload["text"] += f"- {incident.get('description', 'No description')} ({incident['distance_miles']} mi)\n"
-
-    response = requests.post(webhook_url, json=payload)
-    print(f"[INFO] Alert sent. Status code: {response.status_code}")
-
-def main():
+def try_headers(label, headers):
+    print(f"\n[TEST] Trying headers: {label}")
     try:
-        data = fetch_data()
-        filtered = filter_incidents(data)
-        send_alerts(filtered)
+        response = requests.get(URL, headers=headers)
+        print(f"  → Status Code: {response.status_code}")
+        if response.status_code == 200:
+            print(f"  Success with header style: {label}")
+            print(f"  Response Preview:\n  {response.text[:250]}")
+            return True
+        else:
+            print(f"  Failed with header style: {label}")
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"  Exception during request with {label}: {e}")
+    return False
 
-if __name__ == "__main__":
-    main()
+print("[INFO] Starting header strategy test...")
+
+for label, headers in headers_options.items():
+    if try_headers(label, headers):
+        break
+else:
+    print("\n[ERROR] All header variations failed. Please verify your API key or contact MDOT support.")
