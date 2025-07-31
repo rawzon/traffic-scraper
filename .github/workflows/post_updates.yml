@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+      WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}  # Corrected
       MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
 
     steps:
