@@ -1,29 +1,45 @@
 import os
 import requests
 
-MDOT_API_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "api_key": os.environ.get("MDOT_API_KEY")
-}
+def fetch_data():
+    api_key = os.environ.get("MDOT_API_KEY")
+    if not api_key:
+        raise ValueError("[ERROR] Missing MDOT_API_KEY in environment")
 
-def fetch_incidents():
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Authorization": f"Bearer {api_key}"
+    }
+
     print("[INFO] Fetching incident data...")
-    print(f"[DEBUG] API key loaded: {bool(os.environ.get('MDOT_API_KEY'))}")
-    print(f"[DEBUG] Headers: {HEADERS}")
+    print(f"[DEBUG] Headers: {headers}")
 
-    response = requests.get(MDOT_API_URL, headers=HEADERS)
+    response = requests.get(MDOT_URL, headers=headers)
     print(f"[DEBUG] Status code: {response.status_code}")
-    response.raise_for_status()
+
+    if response.status_code != 200:
+        raise Exception(f"[ERROR] Unexpected failure: {response.status_code} - {response.text}")
+
     return response.json()
 
+def send_to_webhook(payload):
+    if not WEBHOOK_URL:
+        raise ValueError("[ERROR] Missing WEBHOOK_URL in environment")
+
+    print("[INFO] Sending data to webhook...")
+    response = requests.post(WEBHOOK_URL, json=payload)
+    print(f"[DEBUG] Webhook status: {response.status_code}")
+
+    if response.status_code != 200:
+        raise Exception(f"[ERROR] Webhook failed: {response.status_code} - {response.text}")
+
 def main():
-    try:
-        data = fetch_incidents()
-        print(f"[INFO] Successfully retrieved {len(data)} incidents.")
-    except requests.exceptions.HTTPError as e:
-        print(f"Unexpected failure: {e}")
+    data = fetch_data()
+    # You can add filtering logic here if needed
+    send_to_webhook(data)
 
 if __name__ == "__main__":
     main()
