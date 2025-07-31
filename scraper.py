@@ -1,73 +1,69 @@
 import requests
 import math
+import os
 
-API_URL = (
-    "https://mdotridedata.state.mi.us/api/v1/organization/"
-    "michigan_department_of_transportation/dataset/incidents/query?_format=json"
-)
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "api_key": "PPVtEiLKbiAGswsa5JAvwdmY"
-}
+# Coordinates for Fort Monroe
+TARGET_LAT = 37.0301
+TARGET_LON = -76.3452
+MAX_RADIUS_MILES = 40
+
+MDOT_FEED_URL = "https://mdottraffic.michigan.gov/devices/services/WebServiceMDOT.asmx/GetIncidents"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-MONROE_LAT = 41.916
-MONROE_LON = -83.385
-RADIUS_MILES = 40
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8
-    dLat = math.radians(lat2 - lat1)
-    dLon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dLat / 2) ** 2 +
-        math.cos(math.radians(lat1)) *
-        math.cos(math.radians(lat2)) *
-        math.sin(dLon / 2) ** 2
-    )
-    return R * 2 * math.asin(math.sqrt(a))
+    R = 3958.8  # Radius of Earth in miles
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
+
 
 def fetch_incidents():
-    print("[INFO] Fetching incident data...")
     try:
-        response = requests.get(API_URL, headers=HEADERS)
-        print(f"[DEBUG] Status code: {response.status_code}")
-        if response.status_code != 200:
-            print("[ERROR] Failed to fetch data:", response.text)
-            return []
-        return response.json()
-    except requests.exceptions.JSONDecodeError:
-        print("[ERROR] Invalid JSON response.")
+        response = requests.get(MDOT_FEED_URL)
+        response.raise_for_status()
+        return response.json().get("Incidents", [])
+    except Exception as e:
+        print(f"Fetch error: {e}")
         return []
 
-def filter_by_distance(data):
+
+def filter_incidents(incidents):
     filtered = []
-    for item in data:
-        lat = item.get("latitude")
-        lon = item.get("longitude")
+    for incident in incidents:
+        lat = incident.get("Latitude")
+        lon = incident.get("Longitude")
         if lat is None or lon is None:
             continue
-        distance = haversine(MONROE_LAT, MONROE_LON, float(lat), float(lon))
-        print(f"[DEBUG] Incident at ({lat}, {lon}) is {distance:.2f} miles from Monroe.")
-        if distance <= RADIUS_MILES:
-            item["distance"] = round(distance, 2)
-            filtered.append(item)
+        distance = haversine(TARGET_LAT, TARGET_LON, float(lat), float(lon))
+        if distance <= MAX_RADIUS_MILES:
+            filtered.append(incident)
     return filtered
 
+
 def send_to_webhook(data):
-    if not data:
-        print("[INFO] No incidents within radius to send.")
+    if not WEBHOOK_URL:
+        print("Error: WEBHOOK_URL not set")
         return
     try:
-        response = requests.post(WEBHOOK_URL, json=data)
-        print(f"[INFO] Webhook status: {response.status_code}")
+        payload = {"content": f"{len(data)} incidents within {MAX_RADIUS_MILES} miles of Fort Monroe"}
+        response = requests.post(WEBHOOK_URL, json=payload)
+        response.raise_for_status()
+        print("Webhook sent successfully")
     except Exception as e:
-        print("[ERROR] Webhook failed:", str(e))
+        print(f"Webhook error: {e}")
 
-def main():
-    raw_data = fetch_incidents()
-    nearby_data = filter_by_distance(raw_data)
-    send_to_webhook(nearby_data)
 
 if __name__ == "__main__":
-    main()
+    print("Starting scraper...")
+    all_incidents = fetch_incidents()
+    print(f"Fetched {len(all_incidents)} incidents")
+    nearby = filter_incidents(all_incidents)
+    print(f"{len(nearby)} incidents within radius")
+    send_to_webhook(nearby)
