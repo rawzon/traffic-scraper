@@ -20,7 +20,7 @@ def fetch_alerts():
         "Accept": "application/json",
         "api_key": MDOT_API_KEY
     }
-    url = "https://mdot-api.com/TrafficAlert"  # Replace with actual endpoint
+    url = "url = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json""  # Replace with actual endpoint
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
