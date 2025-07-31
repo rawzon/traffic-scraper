@@ -65,7 +65,8 @@ def format_incidents(incidents):
         incident = i.get("incident", {})
         description = i.get("description", "").strip()
 
-        if not description:
+        # Treat empty or literal "No description available" as missing description
+        if not description or description.lower() == "no description available":
             lanes = ", ".join(incident.get("lanes-blocked", [])) if incident.get("lanes-blocked") else "N/A"
             direction = direction_map.get(i.get("dir-of-travel", 0), "Unknown")
             start_time = i.get("startdatetime", "Unknown time")
@@ -103,7 +104,4 @@ def main():
             print(f"[ERROR] Webhook error: {resp.text}")
 
     except Exception as e:
-        print(f"[ERROR] Exception occurred: {e}")
-
-if __name__ == "__main__":
-    main()
+        print(f"[ERROR] Exception occurre
