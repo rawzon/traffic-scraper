@@ -2,73 +2,63 @@ import requests
 import math
 import os
 
-MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
-API_KEY = "PPVtEiLKbiAGswsa5JAvwdmY"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-FORT_MONROE_COORDS = (41.9182, -83.3857)
-MAX_DISTANCE_MILES = 40
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "api_key": API_KEY
-}
+FORD_MONROE_LAT = 41.916
+FORD_MONROE_LON = -83.415
+RADIUS_MILES = 200
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8
+    R = 3958.8  # Radius of Earth in miles
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
     return R * 2 * math.asin(math.sqrt(a))
 
-def fetch_events():
+def fetch_incidents():
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "api_key": "PPVtEiLKbiAGswsa5JAvwdmY"
+    }
+    url = "https://mdotjboss.state.mi.us/MiDrive/rest/incidentevents"
     print("[INFO] Fetching incident data...")
-    print(f"[DEBUG] Headers being sent: {HEADERS}")
-    response = requests.get(MDOT_URL, headers=HEADERS, timeout=20)
+    print(f"[DEBUG] Headers being sent: {headers}")
+    response = requests.get(url, headers=headers)
     print(f"[DEBUG] Status code: {response.status_code}")
-    if response.status_code != 200:
-        print(f"[ERROR] Response:\n{response.text}")
-        return []
-    try:
-        data = response.json()
-        print(f"[INFO] Raw incident count: {len(data)}")
-        return data
-    except Exception as e:
-        print(f"[ERROR] Failed to parse JSON: {e}")
-        print(f"[DEBUG] Raw response:\n{response.text}")
-        return []
+    return response.json()
 
-def filter_events(events):
+def filter_incidents(incidents):
     filtered = []
-    for event in events:
-        try:
-            lat = float(event.get("Latitude", 0))
-            lon = float(event.get("Longitude", 0))
-            dist = haversine(lat, lon, *FORT_MONROE_COORDS)
-            if dist <= MAX_DISTANCE_MILES:
-                filtered.append({**event, "DistanceMiles": round(dist, 2)})
-        except Exception as e:
-            print(f"[WARN] Skipping event due to error: {e}")
-    print(f"[INFO] Filtered incident count: {len(filtered)}")
+    for inc in incidents:
+        coords = inc.get("location", {})
+        lat = coords.get("latitude")
+        lon = coords.get("longitude")
+        if lat is None or lon is None:
+            continue
+        distance = haversine(FORD_MONROE_LAT, FORD_MONROE_LON, lat, lon)
+        print(f"[DEBUG] {inc.get('roadName', 'Unknown Road')} - {distance:.2f} mi away")
+        if distance <= RADIUS_MILES:
+            filtered.append(inc)
     return filtered
 
-def send_to_webhook(filtered_events):
-    if not filtered_events:
+def send_to_webhook(filtered):
+    if not filtered:
         print("[INFO] No events to send.")
         return
-    payload = {"alerts": filtered_events}
+    payload = {"incidents": filtered}
+    webhook_url = os.getenv("WEBHOOK_URL")
     try:
-        response = requests.post(WEBHOOK_URL, json=payload)
-        print(f"[INFO] Webhook status: {response.status_code}")
-        if response.status_code != 200:
-            print(f"[ERROR] Webhook response: {response.text}")
+        requests.post(webhook_url, json=payload)
+        print(f"[INFO] Sent {len(filtered)} event(s) to webhook.")
     except Exception as e:
-        print(f"[ERROR] Failed to send webhook: {e}")
+        print(f"[ERROR] Failed to send to webhook: {e}")
 
 def main():
-    if not WEBHOOK_URL:
-        raise ValueError("Missing WEBHOOK_URL env variable.")
-    events = fetch_events()
-    filtered = filter_events(events)
+    data = fetch_incidents()
+    print(f"[INFO] Raw incident count: {len(data)}")
+    filtered = filter_incidents(data)
+    print(f"[INFO] Filtered incident count: {len(filtered)}")
     send_to_webhook(filtered)
 
 if __name__ == "__main__":
