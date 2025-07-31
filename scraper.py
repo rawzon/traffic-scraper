@@ -2,7 +2,7 @@ import os
 import requests
 from geopy.distance import geodesic
 
-MDOT_URL = "https://mdotjboss.state.mi.us/MiDrive/rest/incidentevents"
+MDOT_URL = "MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
 MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
