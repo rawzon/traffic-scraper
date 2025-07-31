@@ -3,7 +3,11 @@ from datetime import datetime
 
 MDOT_ENDPOINT = (
     "https://mdotridedata.state.mi.us/api/v1/organization/"
-    "https://mdotridedata.state.mi.us//api/v1/query?_format=json"
+    "MDOT_ENDPOINT = (
+    "https://mdotridedata.state.mi.us/api/v1/organization/"
+    "michigan_department_of_transportation/dataset/incidents/query"
+    "?limit=200&_format=json"
+)"
 )
 
 HEADERS = {
