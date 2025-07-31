@@ -93,9 +93,15 @@ def main():
 
         message = format_incidents(filtered)
 
-        payload = {
-            "text": message
-        }
+        # Debug print of final message before sending
+        print("=== Final message ===")
+        print(message)
+
+        # Optional test payload - uncomment to send a simple test message instead
+        # payload = { "text": "Test post from scraper - description logic check" }
+
+        # Normal payload sending formatted incidents
+        payload = { "text": message }
 
         print("[INFO] Sending data to webhook...")
         resp = requests.post(WEBHOOK_URL, json=payload, timeout=10)
@@ -104,4 +110,7 @@ def main():
             print(f"[ERROR] Webhook error: {resp.text}")
 
     except Exception as e:
-        print(f"[ERROR] Exception occurre
+        print(f"[ERROR] Exception occurred: {e}")
+
+if __name__ == "__main__":
+    main()
