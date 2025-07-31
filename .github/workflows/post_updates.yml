@@ -2,39 +2,25 @@ name: Post I-75 Updates
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # every 3 hours
-  workflow_dispatch:       # allow manual run
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch:
 
 jobs:
-  update:
+  run-scraper:
     runs-on: ubuntu-latest
-- name: Debug environment variables
-  run: |
-    echo "MDOT_API_KEY is set: $MDOT_API_KEY"
-    echo "WEBHOOK_URL is set: $WEBHOOK_URL"
-  env:
-    MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
-    WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-    env:
-      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-      MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
 
     steps:
-      - name: 📥 Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: 🐍 Set up Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.x'
 
-      - name: 📦 Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: 🧪 Debug environment variables
+      - name: Install dependencies
         run: |
-          echo "MDOT_API_KEY is set: ${MDOT_API_KEY:+yes}"
-          echo "WEBHOOK_URL is set: ${WEBHOOK_URL:+yes}"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: 🚀 Run scraper
-        run: python scraper.py
+      - name: Debug environment variables
