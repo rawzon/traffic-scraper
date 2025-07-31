@@ -1,29 +1,39 @@
-name: Run Traffic Scraper
+name: Scrape Traffic Alerts
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"  # Runs every 15 minutes
 
 jobs:
-  run-script:
+  run-scraper:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: 3.11
 
       - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify secrets and runtime env
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Verify geopy install
-        run: pip freeze | grep geopy || echo "geopy not found!"
-
-      - name: Run scraper
+          echo "Current time: $(date)"
+          echo "Files in repo:"
+          ls -l
+          echo "WEBHOOK_URL is ${WEBHOOK_URL:+set}"
+          echo "MDOT_API_KEY is ${MDOT_API_KEY:+set}"
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
+
+      - name: Run scraper
         run: python scraper.py
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
