@@ -1,69 +1,90 @@
 import os
 import requests
-from datetime import datetime
 from geopy.distance import geodesic
 
-# Environment variables
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-MDOT_API_KEY = os.getenv("MDOT_API_KEY")
+# Config
 CENTER_COORDS = (41.9160, -83.3852)  # Monroe, MI
 RADIUS_MILES = 40
 
-def is_within_radius(lat, lon, center, radius):
-    try:
-        return geodesic(center, (lat, lon)).miles <= radius
-    except:
-        return False
+MDOT_API_KEY = os.getenv("MDOT_API_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-def fetch_alerts():
+MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+
+def fetch_incidents():
+    if not MDOT_API_KEY:
+        raise ValueError("Missing MDOT_API_KEY in environment")
+    
     headers = {
         "Accept": "application/json",
         "api_key": MDOT_API_KEY
     }
-    url = "url = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json""  # Replace with actual endpoint
+
+    print("[INFO] Fetching incident data from MDOT...")
+    response = requests.get(MDOT_URL, headers=headers, timeout=10)
+    print(f"[DEBUG] Status code: {response.status_code}")
+
+    if response.status_code != 200:
+        raise Exception(f"MDOT API error: {response.status_code} — {response.text[:120]}")
+    
+    return response.json()
+
+def is_near_monroe(lat, lon):
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"[ERROR] API status: {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"[ERROR] Fetch failed: {e}")
-        return []
+        dist = geodesic(CENTER_COORDS, (lat, lon)).miles
+        return dist <= RADIUS_MILES, round(dist, 2)
+    except:
+        return False, None
 
-def filter_alerts(data):
-    filtered = []
-    for alert in data:
-        lat, lon = alert.get("latitude"), alert.get("longitude")
-        if lat and lon and is_within_radius(float(lat), float(lon), CENTER_COORDS, RADIUS_MILES):
-            filtered.append(alert)
-    return filtered
+def filter_and_format(raw):
+    incidents = []
+    for item in raw.get("features", []):
+        props = item.get("properties", {})
+        geom = item.get("geometry", {})
+        coords = geom.get("coordinates", [None, None])
+        if len(coords) != 2:
+            continue
+        lon, lat = coords
+        is_near, dist = is_near_monroe(lat, lon)
+        print(f"[DEBUG] Incident '{props.get('description', 'Unknown')}' → {dist} mi from Monroe")
+        if is_near:
+            incidents.append({
+                "description": props.get("description", "No description"),
+                "road": props.get("roadname", "Unknown road"),
+                "distance": dist,
+                "timestamp": props.get("actdatetime", "Unknown time"),
+                "lat": lat,
+                "lon": lon
+            })
+    return incidents
 
-def format_message(alerts):
-    if not alerts:
-        return {"text": "✅ No traffic alerts near Monroe within 40 miles."}
-    lines = [f"🚨 {len(alerts)} alert(s) near Monroe:\n"]
-    for alert in alerts:
-        desc = alert.get("description", "No description")
-        time = alert.get("actdatetime", "Unknown time")
-        loc = f"{alert.get('latitude')}, {alert.get('longitude')}"
-        lines.append(f"- {desc} at {loc} (since {time})")
+def build_payload(incidents):
+    if not incidents:
+        return {"text": "No active traffic incidents within 40 miles of Monroe."}
+    
+    lines = [f"{len(incidents)} traffic alert(s) near Monroe:\n"]
+    for inc in incidents:
+        lines.append(f"- {inc['description']} on {inc['road']} ({inc['distance']} mi), reported at {inc['timestamp']}")
     return {"text": "\n".join(lines)}
 
-def send_to_webhook(payload):
-    try:
-        response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
-        print(f"[INFO] Webhook response: {response.status_code}")
-    except Exception as e:
-        print(f"[ERROR] Webhook failed: {e}")
+def post_to_webhook(payload):
+    if not WEBHOOK_URL:
+        raise ValueError("Missing WEBHOOK_URL in environment")
+
+    print("[INFO] Sending payload to webhook...")
+    response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+    print(f"[INFO] Webhook response status: {response.status_code}")
+    if response.status_code != 200:
+        print(f"[ERROR] Webhook failed: {response.text[:120]}")
 
 def main():
-    print("[INFO] Starting scraper...")
-    alerts = fetch_alerts()
-    filtered = filter_alerts(alerts)
-    payload = format_message(filtered)
-    send_to_webhook(payload)
+    try:
+        raw = fetch_incidents()
+        filtered = filter_and_format(raw)
+        payload = build_payload(filtered)
+        post_to_webhook(payload)
+    except Exception as e:
+        print(f"[ERROR] {e}")
 
 if __name__ == "__main__":
     main()
