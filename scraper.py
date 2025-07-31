@@ -1,9 +1,15 @@
 import requests
 from datetime import datetime
 
-MDOT_ENDPOINT = "https://mdotridedata.state.mi.us//api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
+MDOT_ENDPOINT = (
+    "https://mdotridedata.state.mi.us/api/v1/organization/"
+    "michigan_department_of_transportation/dataset/incidents/query"
+    "?limit=200&_format=json"
+)
+
 HEADERS = {
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0",
+    "X-App-Token": "PPVtEiLKbiAGswsa5JAvwdmY"
 }
 
 def fetch_traffic_events():
