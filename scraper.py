@@ -43,9 +43,9 @@ def format_incidents(incidents):
 
     lines = []
     for i in incidents:
-        road = i.get("road_name", "Unknown road")
-        location = i.get("location", "Unknown location")
-        desc = i.get("description", "No description")
+        road = i.get("roadway", "Unknown road")
+        location = i.get("location-desc", "Unknown location")
+        desc = i.get("description") or "No description available"
         lines.append(f"{road} - {location}: {desc}")
     return "\n".join(lines)
 
