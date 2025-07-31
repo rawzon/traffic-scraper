@@ -1,38 +1,29 @@
-name: Post I-75 Updates
+name: Run Traffic Scraper
 
 on:
-  schedule:
-    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
-  run-scraper:
+  run-script:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Debug environment variables
-        run: |
-          echo "MDOT_API_KEY is set: ${{ secrets.MDOT_API_KEY != '' }}"
-          echo "WEBHOOK_URL is set: ${{ secrets.WEBHOOK_URL != '' }}"
-        env:
-          MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+      - name: Verify geopy install
+        run: pip freeze | grep geopy || echo "geopy not found!"
 
       - name: Run scraper
-        run: python scraper.py
         env:
-          MDOT_API_KEY: ${{ secrets.MDOT_API_KEY }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: python scraper.py
