@@ -1,17 +1,16 @@
-import requests
-import json
-import math
 import os
+import requests
+import math
 
-# Your coordinates
-MY_LAT = 41.8995
-MY_LON = -84.0335
+# Your location (Monroe, MI area)
+MY_LAT = 41.9164
+MY_LON = -83.3977
 RADIUS_MILES = 40
 
 # MDOT API URL
-URL = "https://mdotjboss.state.mi.us/MiDrive/rest/incident"
+MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
 
-# Get env variables
+# Environment variables
 MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
@@ -22,20 +21,9 @@ if not WEBHOOK_URL:
     print("❌ ERROR: WEBHOOK_URL environment variable not set.")
     exit(1)
 
-print("[INFO] Fetching incident data from MDOT...")
-headers = {"mdotApiKey": MDOT_API_KEY}
-response = requests.get(URL, headers=headers)
-
-print("[DEBUG] Status code:", response.status_code)
-data = response.json()
-
-print("[DEBUG] Raw type:", type(data))
-if isinstance(data, list) and data:
-    print("[DEBUG] Sample item:", data[0])
-
-# Distance calculator (Haversine formula)
+# Haversine formula for distance in miles
 def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8  # miles
+    R = 3958.8  # Earth radius in miles
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = (math.sin(dlat / 2) ** 2 +
@@ -45,21 +33,31 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# Filter nearby incidents
-def nearby(incident):
+def fetch_incidents():
+    headers = {
+        "Accept": "application/json",
+        "api_key": MDOT_API_KEY
+    }
+    print("[INFO] Fetching incident data from MDOT...")
+    response = requests.get(MDOT_URL, headers=headers, timeout=10)
+    print(f"[DEBUG] Status code: {response.status_code}")
+    response.raise_for_status()
+    return response.json()
+
+def is_within_radius(incident):
+    lat = incident.get("latitude")
+    lon = incident.get("longitude")
+    if lat is None or lon is None:
+        return False
     try:
-        dist = haversine(MY_LAT, MY_LON, incident["latitude"], incident["longitude"])
-        return dist <= RADIUS_MILES
-    except:
+        return haversine(MY_LAT, MY_LON, float(lat), float(lon)) <= RADIUS_MILES
+    except Exception as e:
+        print(f"[WARN] Invalid coordinates: {e}")
         return False
 
-filtered = [i for i in data if nearby(i)]
-print(f"[INFO] Found {len(filtered)} incidents within {RADIUS_MILES} miles.")
-
-# Format each incident
 def format_incidents(incidents):
-    results = []
     direction_map = {1: "EB", 2: "WB", 3: "SB", 4: "NB"}
+    formatted_list = []
 
     for i in incidents:
         road = i.get("roadway", "Unknown road")
@@ -73,17 +71,39 @@ def format_incidents(incidents):
             start_time = i.get("startdatetime", "Unknown time")
             description = f"Lanes blocked: {lanes}, Direction: {direction}, Reported: {start_time}"
 
-        results.append(f"{road} - {location}: {description}")
+        lat = i.get("latitude")
+        lon = i.get("longitude")
+        if lat and lon:
+            map_link = f"https://www.google.com/maps?q={lat},{lon}"
+        else:
+            map_link = "Location link unavailable"
 
-    return "\n\n".join(results)
+        formatted_list.append(f"{road} - {location}: {description}\nMap: {map_link}")
 
-message = format_incidents(filtered)
+    return "\n\n".join(formatted_list) if formatted_list else "No incidents near Monroe, MI at this time."
 
-# Post to webhook
-print("[INFO] Sending to webhook...")
-payload = {
-    "title": "I-75 Traffic Alert",
-    "description": message if message else "No incidents found nearby."
-}
-webhook_response = requests.post(WEBHOOK_URL, json=payload)
-print("[INFO] Webhook post status:", webhook_response.status_code)
+def main():
+    try:
+        data = fetch_incidents()
+        print(f"[DEBUG] Fetched {len(data)} total incidents.")
+
+        filtered = [inc for inc in data if is_within_radius(inc)]
+        print(f"[INFO] Found {len(filtered)} incidents within {RADIUS_MILES} miles.")
+
+        message = format_incidents(filtered)
+
+        payload = {
+            "text": message
+        }
+
+        print("[INFO] Sending data to webhook...")
+        resp = requests.post(WEBHOOK_URL, json=payload, timeout=10)
+        print(f"[INFO] Webhook response status: {resp.status_code}")
+        if resp.status_code != 200:
+            print(f"[ERROR] Webhook error: {resp.text}")
+
+    except Exception as e:
+        print(f"[ERROR] Exception occurred: {e}")
+
+if __name__ == "__main__":
+    main()
