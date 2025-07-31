@@ -1,69 +1,64 @@
 import requests
-import math
 import os
 
-# --- CONFIG ---
-MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "api_key": "PPVtEiLKbiAGswsa5JAvwdmY"
-}
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-RADIUS_MILES = 200
-CENTER_LAT = 41.916664
-CENTER_LON = -83.395699
+# Fetch the webhook URL from environment variables
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-# --- HELPERS ---
-def miles_between(lat1, lon1, lat2, lon2):
-    R = 3959  # Earth radius in miles
-    d_lat = math.radians(lat2 - lat1)
-    d_lon = math.radians(lon2 - lon1)
-    a = (math.sin(d_lat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(d_lon / 2) ** 2)
-    return R * 2 * math.asin(math.sqrt(a))
+def fetch_incident_data():
+    url = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+    headers = {
+        "Accept": "application/json"
+    }
 
-# --- MAIN ---
-print("Starting scraper...")
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    
+    # Expecting a top-level list, not a dict
+    return response.json()
 
-try:
-    res = requests.get(MDOT_URL, headers=HEADERS, timeout=15)
-    res.raise_for_status()
-    data = res.json()
-except Exception as e:
-    print(f"Fetch error: {e}")
-    data = {}
+def filter_incidents_by_distance(incidents, center_lat, center_lon, max_miles):
+    from geopy.distance import distance
 
-incidents = data.get("features", [])
-print(f"Fetched {len(incidents)} incidents")
+    def is_within_range(feature):
+        coords = feature.get("geometry", {}).get("coordinates")
+        if not coords:
+            return False
+        lon, lat = coords
+        dist = distance((center_lat, center_lon), (lat, lon)).miles
+        return dist <= max_miles
 
-filtered = []
-for item in incidents:
-    props = item.get("properties", {})
-    geom = item.get("geometry", {})
-    coords = geom.get("coordinates", [None, None])
+    return [incident for incident in incidents if is_within_range(incident)]
 
-    if not coords or len(coords) != 2:
-        continue
+def send_to_webhook(filtered_incidents):
+    if not filtered_incidents:
+        print("No relevant incidents to send.")
+        return
 
-    lon, lat = coords
-    distance = miles_between(lat, lon, CENTER_LAT, CENTER_LON)
-    print(f"[{props.get('name', 'Unnamed')}] → {distance:.1f} miles")
+    payload = {"incidents": filtered_incidents}
+    response = requests.post(WEBHOOK_URL, json=payload)
+    response.raise_for_status()
+    print(f"Sent {len(filtered_incidents)} incidents to webhook.")
 
-    if distance <= RADIUS_MILES:
-        props["distance_miles"] = distance
-        filtered.append(props)
+if __name__ == "__main__":
+    print("Starting scraper...")
+    try:
+        incidents = fetch_incident_data()
+        print(f"Total incidents fetched: {len(incidents)}")
 
-print(f"{len(filtered)} incidents within radius")
+        # Debugging the first item’s structure
+        if incidents:
+            print("First item keys:", list(incidents[0].keys()))
 
-payload = {
-    "total": len(filtered),
-    "incidents": filtered
-}
+        # Spatial filter: within 40 miles of Fort Monroe
+        CENTER_LAT = 42.3240
+        CENTER_LON = -83.3780
+        MAX_MILES = 40
 
-try:
-    r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
-    r.raise_for_status()
-    print("Webhook sent successfully")
-except Exception as e:
-    print(f"Webhook error: {e}")
+        filtered = filter_incidents_by_distance(incidents, CENTER_LAT, CENTER_LON, MAX_MILES)
+        print(f"Filtered incidents: {len(filtered)}")
+
+        send_to_webhook(filtered)
+
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        raise
