@@ -1,23 +1,15 @@
-import os
-import requests
-
-MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
+import requests, os, json
 
 def fetch_data():
-    api_key = os.environ.get("MDOT_API_KEY")
-    if not api_key:
-        raise ValueError("[ERROR] Missing MDOT_API_KEY in environment")
-
+    url = "https://mdot-api-url.example.com/incidents"
     headers = {
         "User-Agent": "Mozilla/5.0",
-        "Authorization": f"Bearer {api_key}"
+        "api_key": os.environ.get("MDOT_API_KEY")
     }
 
-    print("[INFO] Fetching incident data...")
-    print(f"[DEBUG] Headers: {headers}")
+    response = requests.get(url, headers=headers)
 
-    response = requests.get(MDOT_URL, headers=headers)
+    print(f"[DEBUG] Headers: {headers}")
     print(f"[DEBUG] Status code: {response.status_code}")
 
     if response.status_code != 200:
@@ -25,21 +17,12 @@ def fetch_data():
 
     return response.json()
 
-def send_to_webhook(payload):
-    if not WEBHOOK_URL:
-        raise ValueError("[ERROR] Missing WEBHOOK_URL in environment")
-
-    print("[INFO] Sending data to webhook...")
-    response = requests.post(WEBHOOK_URL, json=payload)
-    print(f"[DEBUG] Webhook status: {response.status_code}")
-
-    if response.status_code != 200:
-        raise Exception(f"[ERROR] Webhook failed: {response.status_code} - {response.text}")
-
 def main():
+    print("[INFO] Fetching incident data...")
     data = fetch_data()
-    # You can add filtering logic here if needed
-    send_to_webhook(data)
+
+    # Optional: print a small preview to confirm format
+    print("[INFO] Sample incident:", json.dumps(data[0], indent=2) if data else "[INFO] No incidents found")
 
 if __name__ == "__main__":
     main()
