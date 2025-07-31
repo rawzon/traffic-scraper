@@ -2,68 +2,68 @@ import requests
 import math
 import os
 
-# Coordinates for Fort Monroe
-TARGET_LAT = 37.0301
-TARGET_LON = -76.3452
-MAX_RADIUS_MILES = 40
-
-MDOT_FEED_URL = "https://mdottraffic.michigan.gov/devices/services/WebServiceMDOT.asmx/GetIncidents"
+# --- CONFIG ---
+MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "api_key": "PPVtEiLKbiAGswsa5JAvwdmY"
+}
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+RADIUS_MILES = 200
+CENTER_LAT = 41.916664
+CENTER_LON = -83.395699
 
+# --- HELPERS ---
+def miles_between(lat1, lon1, lat2, lon2):
+    R = 3959  # Earth radius in miles
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = (math.sin(d_lat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(d_lon / 2) ** 2)
+    return R * 2 * math.asin(math.sqrt(a))
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 3958.8  # Radius of Earth in miles
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
+# --- MAIN ---
+print("Starting scraper...")
 
-    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+try:
+    res = requests.get(MDOT_URL, headers=HEADERS, timeout=15)
+    res.raise_for_status()
+    data = res.json()
+except Exception as e:
+    print(f"Fetch error: {e}")
+    data = {}
 
-    return R * c
+incidents = data.get("features", [])
+print(f"Fetched {len(incidents)} incidents")
 
+filtered = []
+for item in incidents:
+    props = item.get("properties", {})
+    geom = item.get("geometry", {})
+    coords = geom.get("coordinates", [None, None])
 
-def fetch_incidents():
-    try:
-        response = requests.get(MDOT_FEED_URL)
-        response.raise_for_status()
-        return response.json().get("Incidents", [])
-    except Exception as e:
-        print(f"Fetch error: {e}")
-        return []
+    if not coords or len(coords) != 2:
+        continue
 
+    lon, lat = coords
+    distance = miles_between(lat, lon, CENTER_LAT, CENTER_LON)
+    print(f"[{props.get('name', 'Unnamed')}] → {distance:.1f} miles")
 
-def filter_incidents(incidents):
-    filtered = []
-    for incident in incidents:
-        lat = incident.get("Latitude")
-        lon = incident.get("Longitude")
-        if lat is None or lon is None:
-            continue
-        distance = haversine(TARGET_LAT, TARGET_LON, float(lat), float(lon))
-        if distance <= MAX_RADIUS_MILES:
-            filtered.append(incident)
-    return filtered
+    if distance <= RADIUS_MILES:
+        props["distance_miles"] = distance
+        filtered.append(props)
 
+print(f"{len(filtered)} incidents within radius")
 
-def send_to_webhook(data):
-    if not WEBHOOK_URL:
-        print("Error: WEBHOOK_URL not set")
-        return
-    try:
-        payload = {"content": f"{len(data)} incidents within {MAX_RADIUS_MILES} miles of Fort Monroe"}
-        response = requests.post(WEBHOOK_URL, json=payload)
-        response.raise_for_status()
-        print("Webhook sent successfully")
-    except Exception as e:
-        print(f"Webhook error: {e}")
+payload = {
+    "total": len(filtered),
+    "incidents": filtered
+}
 
-
-if __name__ == "__main__":
-    print("Starting scraper...")
-    all_incidents = fetch_incidents()
-    print(f"Fetched {len(all_incidents)} incidents")
-    nearby = filter_incidents(all_incidents)
-    print(f"{len(nearby)} incidents within radius")
-    send_to_webhook(nearby)
+try:
+    r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
+    r.raise_for_status()
+    print("Webhook sent successfully")
+except Exception as e:
+    print(f"Webhook error: {e}")
