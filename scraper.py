@@ -2,17 +2,24 @@ import os
 import requests
 from geopy.distance import geodesic
 
-MDOT_URL = "MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
+# MDOT endpoint and credentials
+MDOT_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?_format=json"
 MDOT_API_KEY = os.getenv("MDOT_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# Monroe reference point and radius
 MONROE_COORDS = (41.9164, -83.3977)
 DISTANCE_LIMIT_MILES = 40
 
 def fetch_incidents():
-    headers = {"apikey": MDOT_API_KEY}
+    if not MDOT_API_KEY:
+        raise ValueError("MDOT_API_KEY is not set")
+    headers = {
+        "Accept": "application/json",
+        "api_key": MDOT_API_KEY
+    }
     print("[INFO] Fetching incident data from MDOT...")
-    response = requests.get(MDOT_URL, headers=headers, timeout=5)
+    response = requests.get(MDOT_URL, headers=headers, timeout=10)
     print(f"[DEBUG] Status code: {response.status_code}")
     response.raise_for_status()
     return response.json()
@@ -22,18 +29,26 @@ def within_distance(incident):
     lon = incident.get("longitude")
     if lat is None or lon is None:
         return False
-    incident_coords = (float(lat), float(lon))
-    distance = geodesic(MONROE_COORDS, incident_coords).miles
-    return distance <= DISTANCE_LIMIT_MILES
+    try:
+        incident_coords = (float(lat), float(lon))
+        distance = geodesic(MONROE_COORDS, incident_coords).miles
+        return distance <= DISTANCE_LIMIT_MILES
+    except Exception as e:
+        print(f"[WARN] Skipping invalid coordinates: {e}")
+        return False
 
 def main():
     try:
-        incidents = fetch_incidents()
-        nearby = [i for i in incidents if within_distance(i)]
-        print(f"[INFO] Found {len(nearby)} incidents within {DISTANCE_LIMIT_MILES} miles.")
+        data = fetch_incidents()
+        print(f"[DEBUG] Raw type: {type(data)}")
+        print(f"[DEBUG] Sample item: {data[0] if isinstance(data, list) and data else 'No data'}")
+
+        filtered = [i for i in data if within_distance(i)]
+        print(f"[INFO] Found {len(filtered)} incidents within {DISTANCE_LIMIT_MILES} miles.")
+
+        payload = {"incidents": filtered}
 
         if WEBHOOK_URL:
-            payload = {"incidents": nearby}
             try:
                 response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
                 print(f"[INFO] Webhook post status: {response.status_code}")
