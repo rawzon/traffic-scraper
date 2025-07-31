@@ -1,66 +1,62 @@
 import requests
-from math import radians, cos, sin, asin, sqrt
+import math
+import time
 
-# Coordinates for Ford Monroe Packaging Center
-TARGET_LAT = 41.9046
-TARGET_LON = -83.4264
+# Constants
+API_URL = "https://mdotridedata.state.mi.us/api/v1/organization/michigan_department_of_transportation/dataset/incidents/query?limit=200&_format=json"
+API_KEY = "PPVtEiLKbiAGswsa5JAvwdmY"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "api_key": API_KEY
+}
+CENTER_LAT = 41.91685
+CENTER_LON = -83.38579
+RADIUS_MI = 40
 
-# Haversine formula to compute distance in miles
-def haversine(lat1, lon1, lat2, lon2):
-    R = 3959  # Earth radius in miles
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-    c = 2 * asin(sqrt(a))
-    return R * c
+# Haversine formula
+def is_within_radius(lat, lon, radius_mi):
+    R = 3958.8  # Earth radius in miles
+    dlat = math.radians(lat - CENTER_LAT)
+    dlon = math.radians(lon - CENTER_LON)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(CENTER_LAT)) * math.cos(math.radians(lat)) * math.sin(dlon/2)**2
+    distance = R * 2 * math.asin(math.sqrt(a))
+    return distance <= radius_mi
 
-# Filter incidents within 40 miles
-def filter_relevant_events(events):
-    filtered = []
-    farthest_distance = 0
-    for event in events:
-        loc = event.get("location", {})
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
-        if lat is not None and lon is not None:
-            distance = haversine(TARGET_LAT, TARGET_LON, lat, lon)
-            if distance <= 40:
-                filtered.append({
-                    "type": event.get("eventType", "Unknown"),
-                    "description": event.get("description", "No description provided."),
-                    "road": event.get("road", "Unknown"),
-                    "location": loc,
-                    "last_updated": event.get("lastUpdatedDate", "N/A"),
-                    "distance_miles": round(distance, 2)
-                })
-                farthest_distance = max(farthest_distance, distance)
-    print(f"[DEBUG] Filtered {len(filtered)} events within 40 miles")
-    print(f"[DEBUG] Farthest event in filtered set: {round(farthest_distance, 2)} miles away")
-    return filtered
-
-# Grab MDOT traffic events
-def fetch_mdot_events():
-    url = "https://mdotjboss.state.mi.us/MiDrive/rest/events"
+def fetch_events():
     try:
-        response = requests.get(url, timeout=10)
+        print("[INFO] Fetching incident data...")
+        response = requests.get(API_URL, headers=HEADERS, timeout=30)
         response.raise_for_status()
-        all_events = response.json()
-        print(f"[DEBUG] Fetched {len(all_events)} total events")
-        return all_events
+        data = response.json()
     except Exception as e:
         print(f"[ERROR] Failed to fetch events: {e}")
         return []
 
-# Main logic
-if __name__ == "__main__":
-    events = fetch_mdot_events()
-    if events:
-        nearby = filter_relevant_events(events)
-        for event in nearby:
-            print(f"\n📍 {event['type']} on {event['road']}")
-            print(f"→ {event['description']}")
-            print(f"⏱️ Last updated: {event['last_updated']}")
-            print(f"📌 Location: {event['location']}")
-            print(f"📏 Distance: {event['distance_miles']} miles")
-    else:
+    filtered = []
+    for item in data.get("records", []):
+        coords = item.get("location", {})
+        lat, lon = coords.get("latitude"), coords.get("longitude")
+        if lat and lon and is_within_radius(float(lat), float(lon), RADIUS_MI):
+            filtered.append({
+                "type": item.get("incidentType"),
+                "desc": item.get("description"),
+                "road": item.get("roadName"),
+                "lat": lat,
+                "lon": lon,
+                "start": item.get("startDateTime")
+            })
+
+    print(f"[INFO] {len(filtered)} events within {RADIUS_MI} miles.")
+    return filtered
+
+def main():
+    events = fetch_events()
+    if not events:
         print("[INFO] No events retrieved.")
+        return
+
+    for e in events:
+        print(f"- {e['type']}: {e['desc']} on {e['road']} ({e['lat']}, {e['lon']}) @ {e['start']}")
+
+if __name__ == "__main__":
+    main()
