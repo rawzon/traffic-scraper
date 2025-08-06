@@ -1,6 +1,7 @@
 import os
 import requests
 import math
+import json
 
 # Your location (Monroe, MI area)
 MY_LAT = 41.9164
@@ -77,8 +78,24 @@ def main():
         filtered = [i for i in data if is_within_radius(i)]
         incidents = [format_incident(i) for i in filtered]
 
-        print(f"[INFO] Sending {len(incidents)} incidents to webhook...")
-        payload = { "incidents": incidents }
+        if incidents:
+            # Use the first incident (or loop if you want to send multiple later)
+            first = incidents[0]
+            message = (
+                f"🚨 Traffic Alert 🚨\n"
+                f"Road: {first['road']}\n"
+                f"Location: {first['location']}\n"
+                f"{first['description']}\n"
+                f"Map: {first['map']}"
+            )
+        else:
+            message = "✅ No traffic incidents reported near Monroe, MI at this time."
+
+        payload = { "message": message }
+
+        print("[DEBUG] Payload being sent to Make:")
+        print(json.dumps(payload, indent=2))
+
         resp = requests.post(WEBHOOK_URL, json=payload, timeout=10)
         print(f"[INFO] Webhook response: {resp.status_code}")
         if resp.status_code != 200:
